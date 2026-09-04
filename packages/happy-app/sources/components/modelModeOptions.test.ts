@@ -17,6 +17,7 @@ import {
     getEffortLevelsForModel,
     getDefaultPermissionModeKey,
     includeConfiguredModel,
+    includeUnlistedSelectedModel,
     getOpenClawPermissionModes,
     mapMetadataOptions,
     resolveCurrentOption,
@@ -123,6 +124,23 @@ describe('modelModeOptions', () => {
         ]);
         expect(models).toHaveLength(3);
         expect(includeConfiguredModel('claude', models, 'my-workspace-model')).toBe(models);
+    });
+
+    // A session started from an older picker (or before the CLI's dynamic list
+    // moved on) still names its actual model in the composer chip instead of
+    // dropping to the generic MODEL label.
+    it('keeps an unlisted session model selectable without touching listed ones', () => {
+        const models = getClaudeModelModes();
+        const withUnlisted = includeUnlistedSelectedModel(models, 'claude-opus-4.6');
+
+        expect(withUnlisted[withUnlisted.length - 1]).toEqual({
+            key: 'claude-opus-4.6',
+            name: 'claude-opus-4.6',
+            description: 'current model',
+        });
+        expect(withUnlisted).toHaveLength(models.length + 1);
+        expect(includeUnlistedSelectedModel(models, 'claude-opus-5')).toBe(models);
+        expect(includeUnlistedSelectedModel(models, null)).toBe(models);
     });
 
     it('only offers the current-generation claude models', () => {

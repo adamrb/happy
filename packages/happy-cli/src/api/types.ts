@@ -157,6 +157,18 @@ export const MachineMetadataSchema = z.object({
     happyAgentAuthenticated: z.boolean(),
     detectedAt: z.number(),
   }).optional(),
+  /**
+   * Per-harness model catalogs discovered at daemon start, keyed by agent
+   * flavor ('claude', 'codex'). Lets the app's new-session picker offer the
+   * models each machine can actually run; session metadata `models` covers
+   * only sessions that are already running. Same code/value shape as the
+   * session-level list (see modules/dynamicModels).
+   */
+  agentModels: z.record(z.string(), z.array(z.object({
+    code: z.string(),
+    value: z.string(),
+    description: z.string().nullish(),
+  }))).optional(),
 })
 
 export type MachineMetadata = z.infer<typeof MachineMetadataSchema>
@@ -299,6 +311,12 @@ export type Metadata = {
   // `code` = protocol value ID, `value` = human label
   models?: Array<{ code: string; value: string; description?: string | null }>,
   currentModelCode?: string,
+  /**
+   * Current model pick, mirrored by the app (#1492). The CLI pins this when
+   * publishing a dynamic model list so the app's chip resolves against the
+   * published rows rather than a hardcoded per-flavor default key.
+   */
+  modelMode?: string,
   operatingModes?: Array<{ code: string; value: string; description?: string | null }>,
   currentOperatingModeCode?: string,
   thoughtLevels?: Array<{ code: string; value: string; description?: string | null }>,

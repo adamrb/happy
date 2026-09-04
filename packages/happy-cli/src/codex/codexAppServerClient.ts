@@ -818,6 +818,18 @@ export class CodexAppServerClient {
         return { threadId: result.thread.id, model: result.model };
     }
 
+    /**
+     * Ask the app-server which models this Codex install can run. IDs come
+     * back resolved for the active provider (e.g. `openai.gpt-5.6-sol` on
+     * Bedrock), so forwarding them verbatim to `--model`/turn options always
+     * matches what the backend accepts — unlike hardcoded bare slugs, which
+     * 404 on prefix-requiring providers. Consumed by modules/dynamicModels.
+     */
+    async listModels(): Promise<Array<{ id?: string; model?: string; displayName?: string; description?: string | null; hidden?: boolean }>> {
+        const result = await this.request('model/list', {}, 15000) as { data?: Array<{ id?: string; model?: string; displayName?: string; description?: string | null; hidden?: boolean }> } | null;
+        return Array.isArray(result?.data) ? result.data : [];
+    }
+
     async resumeThread(opts?: {
         threadId?: string;
         model?: string;

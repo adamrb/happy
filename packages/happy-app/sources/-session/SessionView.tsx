@@ -11,6 +11,7 @@ import {
     getAvailablePermissionModes,
     getEffortLevelsForModel,
     getRigCurrentModelOptionKey,
+    includeUnlistedSelectedModel,
     resolveCurrentOption,
     EffortLevel,
 } from '@/components/modelModeOptions';
@@ -705,12 +706,19 @@ export function SessionViewLoaded({
     const effectiveAgentDefaults = React.useMemo(() => (
         resolveAgentDefaultConfig(agentDefaultOverrides, flavor, cliVersion)
     ), [agentDefaultOverrides, cliVersion, flavor]);
+    // The session's own modelMode may predate the current catalog (a key from
+    // an older picker, or a dynamic list that has since changed); keep it as a
+    // row so the composer chip names the model actually in use rather than
+    // falling back to the generic MODEL label.
     const availableModels = React.useMemo(() => (
-        getAvailableModels(
-            flavor,
-            session.metadata,
-            t,
-            session.modelMode ?? (isRig ? null : effectiveAgentDefaults.modelMode),
+        includeUnlistedSelectedModel(
+            getAvailableModels(
+                flavor,
+                session.metadata,
+                t,
+                session.modelMode ?? (isRig ? null : effectiveAgentDefaults.modelMode),
+            ),
+            session.modelMode,
         )
     ), [flavor, session.metadata, session.modelMode, effectiveAgentDefaults.modelMode, isRig]);
     const availableModes = React.useMemo(() => (

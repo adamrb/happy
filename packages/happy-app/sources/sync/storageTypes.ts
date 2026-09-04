@@ -456,6 +456,17 @@ export const MachineMetadataSchema = z.object({
         rig: z.boolean().optional(), // Rig runs its own Happy-connected daemon
         detectedAt: z.number(),
     }).optional(),
+    // Per-flavor model catalogs the daemon detected on this computer, keyed by
+    // agent flavor ('claude', 'codex'). Same {code, value, description} shape
+    // as session metadata `models` at the top of this file, so
+    // mapMetadataOptions reads both. `.catch(undefined)` for the same reason
+    // as the Rig catalog below: a malformed catalog from a newer/older CLI
+    // must degrade to the hardcoded picker, not strip the whole machine.
+    agentModels: z.record(z.string(), z.array(z.object({
+        code: z.string(),
+        value: z.string(),
+        description: z.string().nullish(),
+    }).passthrough())).optional().catch(undefined),
     // Rig registers as its own machine instead of being launched by happy-cli.
     // Keep its creation catalog so the new-session UI can send Rig-native
     // provider/model identifiers to the machine RPC.

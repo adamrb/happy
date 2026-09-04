@@ -9,6 +9,7 @@ import { DiffProcessor } from './utils/diffProcessor';
 import { randomUUID } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { logger } from '@/ui/logger';
+import { codexModelsToOptions, mergeModelsIntoMetadata } from '@/modules/dynamicModels/dynamicModels';
 import { Credentials, readSettings } from '@/persistence';
 import { initialMachineMetadata } from '@/daemon/run';
 import { configuration } from '@/configuration';
@@ -825,6 +826,23 @@ export async function runCodex(opts: {
         logger.debug('[codex]: client.connect begin');
         await client.connect();
         logger.debug('[codex]: client.connect done');
+
+        // Ask the harness which models it actually supports and publish them
+        // so the app renders a live picker instead of its hardcoded catalog
+        // (see modules/dynamicModels). Fire-and-forget: a failure here only
+        // means the app falls back to hardcoded options.
+        void client.listModels().then((models) => {
+            const options = codexModelsToOptions(models);
+            if (options.length === 0) return;
+            session.updateMetadata((currentMetadata) => mergeModelsIntoMetadata(
+                currentMetadata,
+                options,
+                opts.model ?? null,
+            ));
+            logger.debug(`[codex]: Published ${options.length} dynamic models to session metadata`);
+        }).catch((error) => {
+            logger.debug('[codex]: Failed to fetch model list:', error);
+        });
 
         if (opts.resumeThreadId) {
             await resumeExistingThread({

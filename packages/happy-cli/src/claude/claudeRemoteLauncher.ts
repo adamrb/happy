@@ -10,6 +10,7 @@ import { Future } from "@/utils/future";
 import { SDKAssistantMessage, SDKMessage, SDKUserMessage } from "./sdk";
 import { formatClaudeMessageForInk } from "@/ui/messageFormatterInk";
 import { logger } from "@/ui/logger";
+import { claudeModelsToOptions, extractModelArg, mergeModelsIntoMetadata } from "@/modules/dynamicModels/dynamicModels";
 import { SDKToLogConverter } from "./utils/sdkToLogConverter";
 import { EnhancedMode } from "./loop";
 import { RawJSONLines } from "@/claude/types";
@@ -29,6 +30,10 @@ interface PermissionsField {
 
 export async function claudeRemoteLauncher(session: Session): Promise<'switch' | 'exit'> {
     logger.debug('[claudeRemoteLauncher] Starting remote launcher');
+
+    // The harness's supported-model list doesn't change within a session, and
+    // claudeRemote re-enters on mode switches — publish once per launcher run.
+    let dynamicModelsPublished = false;
 
     // Check if we have a TTY for UI rendering
     const hasTTY = process.stdout.isTTY && process.stdin.isTTY;
@@ -414,6 +419,24 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
                         permissionHandler.setPermissionModeUpdater(async (mode) => {
                             await q.setPermissionMode(mode);
                         });
+                        // Ask the harness which models it actually supports and
+                        // publish them so the app renders a live picker instead
+                        // of its hardcoded catalog (see modules/dynamicModels).
+                        if (!dynamicModelsPublished) {
+                            dynamicModelsPublished = true;
+                            void q.supportedModels().then((models) => {
+                                const options = claudeModelsToOptions(models);
+                                if (options.length === 0) return;
+                                session.client.updateMetadata((currentMetadata) => mergeModelsIntoMetadata(
+                                    currentMetadata,
+                                    options,
+                                    extractModelArg(session.claudeArgs),
+                                ));
+                                logger.debug(`[remote] Published ${options.length} dynamic models to session metadata`);
+                            }).catch((error) => {
+                                logger.debug('[remote] Failed to fetch supported models:', error);
+                            });
+                        }
                     },
                     onThinkingChange: session.onThinkingChange,
                     claudeEnvVars: session.claudeEnvVars,

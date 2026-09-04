@@ -63,6 +63,7 @@ import {
     getEffortLevelsForModel,
     getSupportsWorktree,
     includeConfiguredModel,
+    mapMetadataOptions,
     type PermissionMode,
     type ModelMode,
     type EffortLevel,
@@ -1041,14 +1042,25 @@ function NewSessionScreen() {
             effortLevel: rigCreation.defaultEffortForModel(rigCreation.defaultModelKey),
         }
         : resolveAgentDefaultConfig(agentDefaultOverrides, selectedAgent, happyCliVersion), [agentDefaultOverrides, happyCliVersion, selectedAgent, rigCreation]);
-    const modelModes = React.useMemo<ModelMode[]>(
-        () => rigCreation?.models ?? includeConfiguredModel(
+    const modelModes = React.useMemo<ModelMode[]>(() => {
+        if (rigCreation?.models) {
+            return rigCreation.models;
+        }
+        // Prefer the catalog the daemon on the picked computer published for
+        // this flavor (machine metadata `agentModels`): it reflects what the
+        // installed CLI actually offers, where the hardcoded list only guesses.
+        // Older CLIs publish nothing and keep the hardcoded fallback.
+        // includeConfiguredModel still appends a saved custom codex model so
+        // it stays selectable regardless of which catalog won.
+        const machineModels = mapMetadataOptions(
+            selectedMachine?.metadata?.agentModels?.[selectedAgent],
+        );
+        return includeConfiguredModel(
             selectedAgent,
-            getHardcodedModelModes(selectedAgent, t),
+            machineModels.length > 0 ? machineModels : getHardcodedModelModes(selectedAgent, t),
             effectiveAgentDefaults.modelMode,
-        ),
-        [selectedAgent, effectiveAgentDefaults.modelMode, rigCreation],
-    );
+        );
+    }, [selectedAgent, effectiveAgentDefaults.modelMode, rigCreation, selectedMachine]);
 
     const currentModel = resolveSelectedOption(modelModes, modelIndex);
     const currentModelKey = currentModel?.key ?? 'default';

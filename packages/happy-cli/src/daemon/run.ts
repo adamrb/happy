@@ -6,6 +6,7 @@ import axios from 'axios';
 import { ApiClient } from '@/api/api';
 import { TrackedSession, SessionEncryptionData } from './types';
 import { MachineMetadata, DaemonState, Metadata } from '@/api/types';
+import { fetchClaudeModelOptions, fetchCodexModelOptions } from '@/modules/dynamicModels/dynamicModels';
 import { SpawnSessionOptions, SpawnSessionResult } from '@/modules/common/registerCommonHandlers';
 import { logger } from '@/ui/logger';
 import { authAndSetupMachineIfNeeded } from '@/ui/auth';
@@ -888,6 +889,41 @@ export async function startDaemon(): Promise<void> {
 
     // Connect to server
     apiMachine.connect();
+
+    // Discover each harness's model catalog and publish it into machine
+    // metadata so the app's new-session picker can offer what this machine
+    // actually runs (with backend-resolved IDs) instead of a hardcoded list.
+    // Fire-and-forget with a hard timeout: a slow or missing harness only
+    // means the app keeps its hardcoded fallback.
+    const publishAgentModels = async () => {
+      const availability = initialMachineMetadata.cliAvailability;
+      const withTimeout = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> => Promise.race([
+        p,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms).unref()),
+      ]);
+      const [claudeModels, codexModels] = await Promise.all([
+        withTimeout(fetchClaudeModelOptions(), 45_000, []).catch((error) => {
+          logger.debug('[DAEMON RUN] Claude model discovery failed:', error);
+          return [];
+        }),
+        availability?.codex === false ? Promise.resolve([]) : withTimeout(fetchCodexModelOptions(), 45_000, []).catch((error) => {
+          logger.debug('[DAEMON RUN] Codex model discovery failed:', error);
+          return [];
+        }),
+      ]);
+      const agentModels: NonNullable<MachineMetadata['agentModels']> = {};
+      if (claudeModels.length > 0) agentModels.claude = claudeModels;
+      if (codexModels.length > 0) agentModels.codex = codexModels;
+      if (Object.keys(agentModels).length === 0) return;
+      await apiMachine.updateMachineMetadata((metadata) => ({
+        ...(metadata ?? initialMachineMetadata),
+        agentModels,
+      }));
+      logger.debug(`[DAEMON RUN] Published agent model catalogs: ${Object.entries(agentModels).map(([k, v]) => `${k}=${v.length}`).join(', ')}`);
+    };
+    void publishAgentModels().catch((error) => {
+      logger.debug('[DAEMON RUN] Agent model catalog publish failed:', error);
+    });
 
     // Every 60 seconds:
     // 1. Prune stale sessions

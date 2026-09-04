@@ -176,6 +176,28 @@ export function includeConfiguredModel(
     ];
 }
 
+// A session can carry a modelMode key the current catalog no longer lists —
+// started from an older hardcoded picker, or the CLI's dynamic list moved on
+// since. Mirror getAvailableModels' Rig "unavailable" pattern: keep the actual
+// key as a row so the composer chip shows it (instead of the generic MODEL
+// label) and the picker still contains the current selection.
+export function includeUnlistedSelectedModel(
+    models: ModelMode[],
+    selectedKey: string | null | undefined,
+): ModelMode[] {
+    if (!selectedKey || models.some((model) => model.key === selectedKey)) {
+        return models;
+    }
+    return [
+        ...models,
+        {
+            key: selectedKey,
+            name: selectedKey,
+            description: 'current model',
+        },
+    ];
+}
+
 export function getGeminiModelModes(): ModelMode[] {
     return GEMINI_MODEL_FALLBACKS;
 }
